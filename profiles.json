@@ -1,0 +1,18 @@
+{
+    "profiles": {
+        "example": {
+            "description": "This is just an example entry",
+            "node_url": "https://rpc.example.com",
+            "key_file": "keys/example.key"
+        },
+        "public": {
+            "description": "This is deprecated Goerli Testnet",
+            "node_url": "https://rpc.public.zkevm-test.net/",
+            "key_file": "keys/public.key"
+        },
+        "cardona": {
+            "node_url": "https://rpc.zkevm-testnet.com/",
+            "key_file": "keys/cardona.key"
+        }
+    }
+}
