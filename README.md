@@ -10,6 +10,17 @@ Then install requirements:
 pip3 install -r requirements.txt
 ```
 
+### Solc
+For tests with SC you need to have solc installed on your system:
+```bash
+https://docs.soliditylang.org/en/latest/installing-solidity.html
+```
+
+Then install the required version to compile contracts:
+```bash
+python3 -c 'from solcx import install_solc; install_solc("0.5.16")'
+```
+
 ### Uniswap V2
 To run Uniswap v2 deployment you need to update the submodule:
 ```bash
