@@ -2,7 +2,7 @@
 ## OS Setup
 Install ```python3``` and ```pip3```, in ubuntu that can be done by:
 ```bash
-sudo apt-get install python3 pytho3-pip
+sudo apt-get install python3 python3-pip
 ```
 
 Then install requirements:
