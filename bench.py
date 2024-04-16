@@ -54,6 +54,7 @@ with open(key_file, 'r') as file:
     funded_key = file.read().strip()
 # Connect to an Ethereum node (replace with your L2 node URL)
 w3 = Web3(Web3.HTTPProvider(node_url))
+l2_chainid = w3.eth.chain_id
 
 # Address with balance enough to fund wallets:
 account = w3.eth.account.from_key(str(funded_key))
@@ -184,6 +185,7 @@ def send_transaction(
             'gas': gas,
             'gasPrice': gas_price,
             'nonce': nonce + i,
+            # 'chainId': l2_chainid,
         }
         if data:
             transaction['data'] = data
@@ -209,9 +211,14 @@ def send_transaction(
                 say(tx_hash.hex())
 
     if wait:
-        for tx_hash in tx_hashes:
-            w.eth.wait_for_transaction_receipt(
-                tx_hash, timeout=180, poll_latency=0.1)
+        # print(F"WAITING FOR: {tx_hashes[-1]}")
+        w.eth.wait_for_transaction_receipt(
+            tx_hashes[-1], timeout=180, poll_latency=0.2)
+
+        # for tx_hash in tx_hashes:
+        #     print(F"WAITING FOR: {tx_hash}")
+        #     w.eth.wait_for_transaction_receipt(
+        #         tx_hash, timeout=180, poll_latency=0.2)
 
     return tx_hashes
 
@@ -226,6 +233,7 @@ def token_transfer(
         'nonce': nonce,
         'gas': token_transfer_gas,
         'gasPrice': gas_price,
+        'chainId': l2_chainid,
     })
 
     # signed_tx = w.eth.account.sign_transaction(tx, src_prvkey)
@@ -233,7 +241,7 @@ def token_transfer(
     tx_hash = wrapped_send_raw_transaction(w, tx, src_prvkey)
 
     _ = w.eth.wait_for_transaction_receipt(
-        tx_hash, timeout=120, poll_latency=0.1
+        tx_hash, timeout=120, poll_latency=0.2
     )
     return tx_hash
 
@@ -270,7 +278,7 @@ class MultiTxSender(Thread):
 
 def fund_wallets_in_parallel(wallets, eth_amount, v=False):
     threads = []
-    nonce = w3.eth.get_transaction_count(funded_address)
+    nonce = w3.eth.get_transaction_count(funded_address, 'pending')
     say(
         f"Funding {len(wallets)} wallets with {eth_amount:.6f}ETH each, "
         f"using funds from {funded_address}..."
@@ -407,7 +415,8 @@ class ContractDeployer(Thread):
                     'from': self.account_address,
                     'nonce': self.nonce + i,
                     'gasPrice': gas_price,
-                    'gas': contract_create_gas
+                    'gas': contract_create_gas,
+                    'chainId': l2_chainid
                 }
             )
 
@@ -424,6 +433,7 @@ class ContractDeployer(Thread):
             self.tx_hashes.append(tx_hash.hex())
 
             # Wait for the transaction to be mined
+            say(f"Waiting for erc20 create tx {tx_hash.hex()}")
             transaction_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 
             # Get the deployed contract address
@@ -558,8 +568,10 @@ bench_results = [
 ]
 
 say(f"** Starting benchmark against {node_url} ({w3.client_version}) | "
-    f"{num_senders} senders, {txs_per_sender} txs per sender | "
-    f"Logging everything to: {log_file}")
+    f"Profile: {selected_profile} | ChainId: {l2_chainid} | "
+    f"Funded address: {funded_address} | Balance: {initial_balance} wei |"
+    f"{num_senders} senders, {txs_per_sender} txs per sender")
+say(f"Logging everything to: {log_file}")
 
 # CREATE AND FUND WALLETS
 (sender_wallets, receiver_wallets) = create_wallets(num_senders)
@@ -574,11 +586,11 @@ if do_unconfirmed:
     total_eth_amount += txs_per_sender*eth_amount
 if do_erc20create:
     total_eth_amount += txs_per_sender*float(
-        w3.from_wei(contract_create_gas*gas_price*1.10, 'ether')
+        w3.from_wei(contract_create_gas*gas_price*1.25, 'ether')
     )
 if do_erc20txs:
     total_eth_amount += txs_per_sender*float(
-        w3.from_wei(token_transfer_gas*gas_price*1.10, 'ether')
+        w3.from_wei(token_transfer_gas*gas_price*1.25, 'ether')
     )
 if do_uniswap:
     total_eth_amount += 6*txs_per_sender*float(
@@ -586,7 +598,7 @@ if do_uniswap:
     )
 start_time = time.time()
 gas_price = w3.eth.gas_price
-fund_wallets_in_parallel(sender_wallets, total_eth_amount)
+fund_wallets_in_parallel(sender_wallets, total_eth_amount*5)
 end_time = time.time()
 total_time = end_time - start_time
 say(f"Time to fund {num_senders} wallets: {total_time:.2f} seconds"
@@ -687,11 +699,11 @@ if do_unconfirmed:
     if not do_confirmed:
         confirmed_total_time = total_time * 3
 
-    say(
-        f"Waiting {int(confirmed_total_time-total_time)}s "
-        "to allow unconfirmed txs to be processed"
-    )
-    time.sleep(int(confirmed_total_time-total_time))
+    # say(
+    #     f"Waiting {int(confirmed_total_time-total_time)}s "
+    #     "to allow unconfirmed txs to be processed"
+    # )
+    # time.sleep(int(confirmed_total_time-total_time))
 
 # CREATE ERC20 TOKENS
 if do_erc20create:
@@ -754,6 +766,7 @@ if do_recover:
     #     f"recover:{((num_senders*txs_per_sender)/total_time):.2f}")
 
 final_balance = w3.eth.get_balance(funded_address)
+say(f"Initial:{initial_balance} Final:{final_balance}")
 eth_cost = float(w3.from_wei(initial_balance-final_balance, 'ether'))
 bench_results.insert(1, f"eth_cost:{eth_cost:.5f}")
 bench_results.insert(1, f"profile:{selected_profile}")
